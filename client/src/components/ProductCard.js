@@ -1,53 +1,119 @@
 // ============================================================================
 // PRODUCT CARD Component
-// Individual product card displayed in product lists
-// EDIT: Add wishlist/favorites functionality
+// Individual product card displayed in product lists with Framer Motion Tilt
 // ============================================================================
 
-import React from 'react';
+import React, { useRef } from 'react';
 import { Link } from 'react-router-dom';
+import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import './styles/ProductCard.css';
 
 function ProductCard({ product }) {
-  // EDIT: Price display - uses currency from product (₱ for Philippine Peso)
+  const cardRef = useRef(null);
+
+  // Mouse position values
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+
+  // Spring physics for smooth tilt
+  const springConfig = { damping: 20, stiffness: 300, mass: 0.5 };
+  const smoothX = useSpring(x, springConfig);
+  const smoothY = useSpring(y, springConfig);
+
+  // Rotate transforms (tilt effect)
+  const rotateX = useTransform(smoothY, [-0.5, 0.5], [10, -10]);
+  const rotateY = useTransform(smoothX, [-0.5, 0.5], [-10, 10]);
+
+  // Lighting/glare effect
+  const glareOpacity = useTransform(smoothY, [-0.5, 0.5], [0.1, 0.3]);
+  const glareY = useTransform(smoothY, [-0.5, 0.5], [-20, 20]);
+  const glareX = useTransform(smoothX, [-0.5, 0.5], [-20, 20]);
+
+  const handleMouseMove = (e) => {
+    if (!cardRef.current) return;
+    const rect = cardRef.current.getBoundingClientRect();
+    
+    // Calculate mouse position relative to card center (-0.5 to 0.5)
+    const mouseX = (e.clientX - rect.left) / rect.width - 0.5;
+    const mouseY = (e.clientY - rect.top) / rect.height - 0.5;
+    
+    x.set(mouseX);
+    y.set(mouseY);
+  };
+
+  const handleMouseLeave = () => {
+    // Reset back to neutral on leave
+    x.set(0);
+    y.set(0);
+  };
+
   const currency = product.currency || '₱';
   const formattedPrice = `${currency}${product.price.toLocaleString('en-PH')}`;
 
   return (
-    <Link to={`/product/${product.id}`} className="product-card-link">
-      <div className="product-card">
+    <Link to={`/product/${product.id}`} className={`product-card-link ${product.status === 'sold_out' ? 'sold-out-link' : ''}`} style={{ perspective: 1000, pointerEvents: product.status === 'sold_out' ? 'none' : 'auto' }}>
+      <motion.div 
+        className={`product-card ${product.status === 'sold_out' ? 'sold-out' : ''}`}
+        ref={cardRef}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={handleMouseLeave}
+        style={{
+          rotateX,
+          rotateY,
+          transformStyle: "preserve-3d"
+        }}
+        whileHover={{ scale: 1.02, zIndex: 10 }}
+        transition={{ type: "spring", stiffness: 300, damping: 20 }}
+      >
+        
+        {/* Dynamic Glare Overlay */}
+        <motion.div 
+          className="card-glare"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'linear-gradient(105deg, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0) 40%)',
+            opacity: glareOpacity,
+            x: glareX,
+            y: glareY,
+            pointerEvents: 'none',
+            zIndex: 5,
+            mixBlendMode: 'overlay',
+            borderRadius: '16px'
+          }}
+        />
+
         {/* Product Image */}
-        <div className="product-image-container">
+        <div className="product-image-container" style={{ transform: "translateZ(30px)" }}>
           <img 
             src={product.image} 
             alt={product.name}
-            className="product-image"
+            className={`product-image ${product.status === 'sold_out' ? 'grayscale' : ''}`}
             onError={(e) => {
               e.target.src = 'https://via.placeholder.com/300x400?text=Product+Image';
             }}
           />
-          {/* Add to Cart Overlay - EDIT: Add wishlist button */}
-          <div className="product-overlay">
-            <button className="overlay-button">View Details</button>
-          </div>
+          {product.status === 'sold_out' && (
+            <div className="sold-out-badge">SOLD OUT</div>
+          )}
+          {/* Add to Cart Overlay */}
+          {product.status !== 'sold_out' && (
+            <div className="product-overlay">
+              <button className="overlay-button">View Details</button>
+            </div>
+          )}
         </div>
 
         {/* Product Info */}
-        <div className="product-info">
+        <div className="product-info" style={{ transform: "translateZ(20px)", opacity: product.status === 'sold_out' ? 0.6 : 1 }}>
           <h3 className="product-name">{product.name}</h3>
-          
-          {/* Rating */}
-          <div className="product-rating">
-            <span className="stars">{'⭐'.repeat(Math.floor(product.rating))}</span>
-            <span className="rating-text">({product.reviews})</span>
-          </div>
 
-          {/* Price - EDIT: Currency is set in product data */}
+          {/* Price */}
           <div className="product-price">
             <span className="price">{formattedPrice}</span>
           </div>
 
-          {/* Color Preview - EDIT: Make clickable to select color */}
+          {/* Color Preview */}
           {product.colors && product.colors.length > 0 && (
             <div className="color-preview">
               {product.colors.slice(0, 3).map((color, index) => (
@@ -71,13 +137,12 @@ function ProductCard({ product }) {
             </div>
           )}
         </div>
-      </div>
+      </motion.div>
     </Link>
   );
 }
 
 // Helper function to convert color names to hex codes
-// EDIT: Add more colors here as needed
 function getColorCode(colorName) {
   const colorMap = {
     'Pink': '#ffc0cb',

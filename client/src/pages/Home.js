@@ -5,14 +5,16 @@
 
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import Hero from '../components/Hero';
 import ProductList from '../components/ProductList';
-import { fetchProducts, createCart } from '../utils/api';
+import { fetchProducts, createCart, subscribeToNewsletter } from '../utils/api';
 import './styles/Home.css';
 
 function Home({ cartId, setCartId }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [dbProducts, setDbProducts] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('fairycore');
   const [email, setEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
@@ -36,12 +38,15 @@ function Home({ cartId, setCartId }) {
   useEffect(() => {
     setLoading(true);
     fetchProducts()
-      .then(() => {
+      .then((data) => {
+        if (data && Array.isArray(data)) {
+          setDbProducts(data);
+        }
         setError(null);
       })
       .catch(err => {
-        setError('Failed to load products. Please try again later.');
-        console.error('Error:', err);
+        console.error('Error fetching products from backend:', err);
+        // Gracefully ignore error and use local fallback items instead of showing to customer
       })
       .finally(() => setLoading(false));
   }, []);
@@ -431,17 +436,31 @@ function Home({ cartId, setCartId }) {
     },
   ];
 
-  // Get products for selected category
+  // Get products for selected category (Merge DB + Local placeholders)
   const getCategoryProducts = () => {
+    // Helper to merge local products with DB data (so status updates apply)
+    const mergeProducts = (localProds) => {
+      return localProds.map(localProd => {
+        const dbProd = dbProducts.find(p => p.id === localProd.id);
+        return dbProd ? { ...localProd, status: dbProd.status || localProd.status } : localProd;
+      });
+    };
+
+    const adminProds = dbProducts.filter(p => p.category?.toLowerCase() === selectedCategory && 
+      !fairycoreProducts.some(lp => lp.id === p.id) && 
+      !coquetteProducts.some(lp => lp.id === p.id) && 
+      !y2kProducts.some(lp => lp.id === p.id)
+    );
+
     switch (selectedCategory) {
       case 'fairycore':
-        return fairycoreProducts;
+        return [...mergeProducts(fairycoreProducts), ...adminProds];
       case 'coquette':
-        return coquetteProducts;
+        return [...mergeProducts(coquetteProducts), ...adminProds];
       case 'y2k':
-        return y2kProducts;
+        return [...mergeProducts(y2kProducts), ...adminProds];
       default:
-        return fairycoreProducts;
+        return [...mergeProducts(fairycoreProducts), ...adminProds];
     }
   };
 
@@ -449,12 +468,17 @@ function Home({ cartId, setCartId }) {
   const bestSellers = [...coquetteProducts.slice(0, 2), ...fairycoreProducts.slice(0, 2)];
 
   // Newsletter subscription handler
-  const handleNewsletterSubmit = (e) => {
+  const handleNewsletterSubmit = async (e) => {
     e.preventDefault();
     if (email) {
-      setSubscribed(true);
-      setEmail('');
-      setTimeout(() => setSubscribed(false), 3000);
+      try {
+        await subscribeToNewsletter(email);
+        setSubscribed(true);
+        setEmail('');
+        setTimeout(() => setSubscribed(false), 3000);
+      } catch (err) {
+        alert('Failed to subscribe: ' + err.message);
+      }
     }
   };
 
@@ -556,7 +580,7 @@ function Home({ cartId, setCartId }) {
   ];
 
   return (
-    <div className="home-page" style={{ backgroundImage: "url('/coquette.jpg')" }}>
+    <div className="home-page">
       {/* Hero Banner */}
       <Hero />
 
@@ -569,10 +593,16 @@ function Home({ cartId, setCartId }) {
           </div>
         )}
 
-        {/* ====== COLLECTION CARDS - Find Your Aesthetic Era ====== */}
-        <section className="collections-section">
-          <div className="section-divider">✦ SHOP BY AESTHETIC ✦</div>
+        {/* ====== COLLECTION CARDS ====== */}
+        <motion.section 
+          className="collections-section"
+          initial={{ opacity: 0, y: 50 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-50px" }}
+          transition={{ duration: 0.6 }}
+        >
           <div className="section-header">
+            <div className="section-label">✦ Shop by Aesthetic</div>
             <h2 className="section-title">Find Your Aesthetic Era</h2>
             <p className="section-description">Discover curated collections handpicked for your style</p>
           </div>
@@ -591,9 +621,13 @@ function Home({ cartId, setCartId }) {
               >
                 <div className="collection-card-content">
                   <h3>{collection.name}</h3>
-                  <div className="collection-emoji">{collection.emoji}</div>
+                  <div className="collection-emoji">
+                    <span role="img" aria-label={collection.name}>{collection.emoji}</span>
+                  </div>
                   <p className="collection-count">{collection.count} PIECES</p>
-                  <p className="collection-emoji">{collection.emoji}</p>
+                  <p className="collection-emoji">
+                    <span role="img" aria-label={collection.name}>{collection.emoji}</span>
+                  </p>
                   <p className="collection-description">{collection.description}</p>
                   <Link to="/shop" className="collection-btn" style={{ borderColor: collection.color, color: collection.color }}>
                     SHOP NOW →
@@ -602,12 +636,18 @@ function Home({ cartId, setCartId }) {
               </div>
             ))}
           </div>
-        </section>
+        </motion.section>
 
-        {/* ====== KITTY FINDS COLLECTION - Unified with dropdown ====== */}
-        <section className="category-section">
-          <div className="section-divider">✦ KITTY FINDS COLLECTION ✦</div>
+        {/* ====== KITTY FINDS COLLECTION ====== */}
+        <motion.section 
+          className="category-section"
+          initial={{ opacity: 0, y: 50 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-50px" }}
+          transition={{ duration: 0.6 }}
+        >
           <div className="section-header">
+            <div className="section-label">✦ Kitty Finds Collection</div>
             <h2 className="section-title">Browse All Pieces</h2>
             <p className="section-description">Explore our handpicked selection across all aesthetics</p>
             
@@ -625,21 +665,33 @@ function Home({ cartId, setCartId }) {
             </div>
           </div>
           <ProductList products={getCategoryProducts()} loading={loading} showFilters={false} />
-        </section>
+        </motion.section>
 
         {/* ====== BEST SELLERS ====== */}
-        <section className="best-sellers-section">
-          <div className="section-divider">✦ BEST SELLERS ✦</div>
+        <motion.section 
+          className="best-sellers-section"
+          initial={{ opacity: 0, y: 50 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-50px" }}
+          transition={{ duration: 0.6 }}
+        >
           <div className="section-header">
+            <div className="section-label">✦ Best Sellers</div>
             <h2 className="section-title">Customer Favorites</h2>
             <p className="section-description">Shop the pieces our customers love most</p>
           </div>
           <ProductList products={bestSellers} loading={loading} showFilters={false} />
-        </section>
+        </motion.section>
 
         {/* ====== SPRING SALE COUNTDOWN ====== */}
-        <section className="sale-section">
-          <div className="section-divider">✦ LIMITED TIME OFFER ✦</div>
+        <motion.section 
+          className="home-section-dark"
+          initial={{ opacity: 0, scale: 0.95 }}
+          whileInView={{ opacity: 1, scale: 1 }}
+          viewport={{ once: true, margin: "-50px" }}
+          transition={{ duration: 0.8 }}
+        >
+        <div className="sale-section">
           <h2>Spring Sale — Up to 40% Off</h2>
           <p>Our biggest sale of the season. Dreamy pieces at their most irresistible prices.</p>
           
@@ -663,10 +715,20 @@ function Home({ cartId, setCartId }) {
           </div>
 
           <Link to="/shop" className="shop-sale-btn">🎀 SHOP THE SALE</Link>
-        </section>
+        </div>
+        </motion.section>
 
         {/* ====== FEATURES / TRUST BADGES ====== */}
-        <section className="features-section">
+        <motion.section 
+          className="features-section"
+          initial={{ opacity: 0, y: 50 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-50px" }}
+          transition={{ duration: 0.6 }}
+        >
+          <div className="section-header text-center">
+            <div className="section-label" style={{margin:'0 auto 14px'}}>✦ Why Shop With Us</div>
+          </div>
           <div className="features-grid">
             {features.map((feature, index) => (
               <div key={index} className="feature-box">
@@ -676,41 +738,22 @@ function Home({ cartId, setCartId }) {
               </div>
             ))}
           </div>
-        </section>
+        </motion.section>
 
-        {/* ====== TESTIMONIALS - What Our Dreamers Say ====== */}
-        <section className="testimonials-section">
-          <div className="section-divider">✦ REAL LOVE NOTES ✦</div>
-          <div className="section-header">
-            <h2 className="section-title">What Our Dreamers Say</h2>
-            <p className="section-description">Real reviews from our wonderful customers</p>
-          </div>
-          
-          <div className="testimonials-grid">
-            {testimonials.map((testimonial, index) => (
-              <div key={index} className="testimonial-card">
-                <div className="testimonial-stars">
-                  {Array(testimonial.rating).fill('⭐').join('')}
-                </div>
-                <p className="testimonial-text">"{testimonial.text}"</p>
-                <div className="testimonial-author">
-                  <div className="author-avatar">{testimonial.name.charAt(0)}</div>
-                  <div>
-                    <p className="author-name">{testimonial.name}</p>
-                    <p className="author-product">{testimonial.product}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
+
 
         {/* ====== BLOG / LOOKBOOK ====== */}
-        <section className="blog-section">
-          <div className="section-divider">✦ STYLE DIARIES ✦</div>
+        <motion.section 
+          className="blog-section"
+          initial={{ opacity: 0, y: 50 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-50px" }}
+          transition={{ duration: 0.6 }}
+        >
           <div className="section-header">
+            <div className="section-label">✦ Style Diaries</div>
             <h2 className="section-title">From the Lookbook</h2>
-            <p className="section-description">Styling tips, trends & aesthetic inspiration</p>
+            <p className="section-description">Styling tips, trends &amp; aesthetic inspiration</p>
           </div>
 
           <div className="blog-grid">
@@ -733,13 +776,19 @@ function Home({ cartId, setCartId }) {
           <div style={{ textAlign: 'center', marginTop: '2rem' }}>
             <Link to="/blog" className="view-all-btn">ALL ARTICLES →</Link>
           </div>
-        </section>
+        </motion.section>
 
         {/* ====== COMMISSION REWORK BUNDLE SAMPLES ====== */}
-        <section className="reworks-section">
-          <div className="section-divider">✦ HANDPICKED FOR YOU ✦</div>
+        <motion.section 
+          className="reworks-section"
+          initial={{ opacity: 0, y: 50 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-50px" }}
+          transition={{ duration: 0.6 }}
+        >
           <div className="section-header">
-            <h2 className="section-title">Commission Rework Bundle Samples</h2>
+            <div className="section-label">✦ Handpicked For You</div>
+            <h2 className="section-title">Commission Rework Samples</h2>
             <p className="section-description">See samples from our custom rework services — transforming pieces just for you</p>
           </div>
           <div className="reworks-grid">
@@ -759,14 +808,20 @@ function Home({ cartId, setCartId }) {
               </div>
             ))}
           </div>
-        </section>
+        </motion.section>
 
         {/* ====== NEWSLETTER SIGNUP ====== */}
-        <section className="newsletter-section">
-          <div className="section-divider">✦ JOIN THE INNER CIRCLE ✦</div>
+        <motion.section 
+          className="newsletter-section"
+          initial={{ opacity: 0, y: 50 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-50px" }}
+          transition={{ duration: 0.6 }}
+        >
           <div className="newsletter-content">
+            <div className="section-label section-label-light" style={{margin:'0 auto 16px'}}>✦ Join the Inner Circle</div>
             <h2>Get 15% Off Your First Order</h2>
-            <p>Sign up for exclusive drops, styling tips, early access sales & all the dreamy things delivered straight to your inbox. 🎀</p>
+            <p>Sign up for exclusive drops, styling tips, early access sales &amp; dreamy things straight to your inbox. 🎀</p>
             
             <form onSubmit={handleNewsletterSubmit} className="newsletter-form">
               <input
@@ -782,7 +837,7 @@ function Home({ cartId, setCartId }) {
             {subscribed && <p className="subscribe-success">✨ Thank you for subscribing! Check your inbox. 💌</p>}
             <p className="newsletter-disclaimer">No spam, only dreamy things. Unsubscribe anytime.</p>
           </div>
-        </section>
+        </motion.section>
       </div>
     </div>
   );

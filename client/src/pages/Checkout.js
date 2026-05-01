@@ -105,12 +105,17 @@ function Checkout({ cartId, setCartId }) {
     setSubmitting(true);
 
     try {
-      // Create order
+      // Create order with structured data
       const order = await createOrder(cartId, {
-        name: `${formData.firstName} ${formData.lastName}`,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
         email: formData.email,
         phone: formData.phone,
-        address: `${formData.address}, ${formData.city}, ${formData.state} ${formData.zipCode}, ${formData.country}`,
+        address: formData.address,
+        city: formData.city,
+        state: formData.state,
+        zipCode: formData.zipCode,
+        country: formData.country
       });
 
       setOrderId(order.orderId);
@@ -156,7 +161,7 @@ function Checkout({ cartId, setCartId }) {
               <p>Tax: ₱{cart.tax.toFixed(2)}</p>
               <p className="total">Total: ₱{cart.total.toFixed(2)}</p>
             </div>
-            <button className="btn btn-primary" onClick={() => navigate('/')}>
+            <button className="btn btn-primary" onClick={() => window.location.href = '/'}>
               Back to Shop
             </button>
           </div>

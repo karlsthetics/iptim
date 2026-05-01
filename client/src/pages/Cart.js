@@ -125,26 +125,9 @@ function Cart({ cartId, setCartId }) {
                     <div className="item-controls">
                       {/* Quantity Selector */}
                       <div className="quantity-selector">
-                        <button
-                          className="qty-btn"
-                          onClick={() => handleQuantityChange(item, item.quantity - 1)}
-                        >
-                          −
-                        </button>
-                        <input
-                          type="number"
-                          min="1"
-                          max="99"
-                          value={item.quantity}
-                          onChange={(e) => handleQuantityChange(item, parseInt(e.target.value) || 1)}
-                          className="qty-input"
-                        />
-                        <button
-                          className="qty-btn"
-                          onClick={() => handleQuantityChange(item, item.quantity + 1)}
-                        >
-                          +
-                        </button>
+                        <span className="badge" style={{ background: '#ff69b4', color: '#fff', padding: '4px 10px', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 'bold' }}>
+                          1 of 1 Available
+                        </span>
                       </div>
 
                       {/* Item Total */}
