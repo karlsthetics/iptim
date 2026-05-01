@@ -22,6 +22,22 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // API ROUTES - PRODUCTS
 // ============================================================================
 
+// Helper function to get all sold out product IDs by checking orders
+async function getSoldOutProductIds() {
+  const { data: orders } = await supabase.from('orders').select('items');
+  let soldOutIds = new Set();
+  if (orders) {
+    orders.forEach(order => {
+      if (order.items && Array.isArray(order.items)) {
+        order.items.forEach(item => {
+          if (item.productId) soldOutIds.add(item.productId);
+        });
+      }
+    });
+  }
+  return soldOutIds;
+}
+
 // Get all products
 app.get('/api/products', async (req, res) => {
   try {
@@ -36,7 +52,13 @@ app.get('/api/products', async (req, res) => {
     const { data, error } = await query;
     if (error) throw error;
 
-    res.json({ success: true, data, count: data.length });
+    const soldOutIds = await getSoldOutProductIds();
+    const productsWithStatus = data.map(p => ({
+      ...p,
+      status: soldOutIds.has(p.id) ? 'sold_out' : 'available'
+    }));
+
+    res.json({ success: true, data: productsWithStatus, count: productsWithStatus.length });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -45,8 +67,19 @@ app.get('/api/products', async (req, res) => {
 // Get single product
 app.get('/api/products/:id', async (req, res) => {
   try {
-    const { data, error } = await supabase.from('products').select('*').eq('id', req.params.id).single();
-    if (error || !data) return res.status(404).json({ success: false, error: 'Product not found' });
+    const { id } = req.params;
+    let { data, error } = await supabase.from('products').select('*').eq('id', id).single();
+    
+    const soldOutIds = await getSoldOutProductIds();
+
+    if (error) {
+      if (soldOutIds.has(id)) {
+        return res.json({ success: true, data: { id, status: 'sold_out' } });
+      }
+      throw error;
+    }
+
+    data.status = soldOutIds.has(id) ? 'sold_out' : 'available';
     res.json({ success: true, data });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
@@ -142,7 +175,7 @@ app.get('/api/carts/:id', async (req, res) => {
 
     const items = data.items || [];
     const subtotal = items.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 1), 0);
-    const shipping = items.length > 0 ? 250 : 0;
+    const shipping = 0; // Free shipping
     const tax = subtotal * 0.12; 
     const total = subtotal + shipping + tax;
 
@@ -193,7 +226,7 @@ app.delete('/api/carts/:id/items/:productId', async (req, res) => {
 app.post('/api/carts/:id/items', async (req, res) => {
   try {
     const { id } = req.params;
-    const { productId, quantity, size, color } = req.body;
+    const { productId, quantity, size, color, name, price, image } = req.body;
 
     // 1. Try to get the existing cart
     let { data: cart, error: getError } = await supabase.from('carts').select('items').eq('id', id).single();
@@ -215,18 +248,26 @@ app.post('/api/carts/:id/items', async (req, res) => {
     const existingIndex = items.findIndex(i => i.productId === productId && i.size === size && i.color === color);
 
     if (existingIndex > -1) {
-      items[existingIndex].quantity += quantity;
+      // For thrift items, restrict quantity to exactly 1
+      items[existingIndex].quantity = 1;
     } else {
+      // Prevent adding sold out items to cart
+      const soldOutIds = await getSoldOutProductIds();
+      if (soldOutIds.has(productId)) {
+        return res.status(400).json({ success: false, error: 'This item is already sold out!' });
+      }
+
       // Get product details for the cart (optional but helpful)
       const { data: product } = await supabase.from('products').select('name, price, image').eq('id', productId).single();
+
       items.push({ 
         productId, 
         quantity, 
         size, 
         color,
-        name: product?.name || 'Product',
-        price: product?.price || 0,
-        image: product?.image || ''
+        name: product?.name || name || 'Product',
+        price: product?.price || price || 0,
+        image: product?.image || image || ''
       });
     }
 
@@ -256,7 +297,7 @@ app.post('/api/orders', async (req, res) => {
 
     // Calculate totals
     const subtotal = cart.items.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 1), 0);
-    const shipping = 250; // Fixed flat shipping fee as per objective
+    const shipping = 0; // Free shipping
     const total = subtotal + shipping;
 
     const orderData = {
@@ -274,6 +315,24 @@ app.post('/api/orders', async (req, res) => {
 
     const { data, error } = await supabase.from('orders').insert([orderData]).select().single();
     if (error) throw error;
+
+    if (cart.items && cart.items.length > 0) {
+      for (const item of cart.items) {
+        const { data } = await supabase.from('products').select('id').eq('id', item.productId);
+        // If product wasn't found in DB (it was a local placeholder), insert it without status column
+        if (!data || data.length === 0) {
+          const insertPayload = {
+            id: item.productId,
+            name: item.name || 'Product',
+            price: item.price || 0,
+            image: item.image || '',
+            category: item.productId ? item.productId.split('-')[0] : 'coquette'
+          };
+          const { error: insErr } = await supabase.from('products').insert([insertPayload]);
+          if (insErr) console.error("Failed to insert placeholder product:", insErr);
+        }
+      }
+    }
 
     // Optional: Clear cart after order
     await supabase.from('carts').update({ items: [] }).eq('id', cartId);
@@ -314,6 +373,23 @@ app.put('/api/orders/:id', async (req, res) => {
     }
 
     res.json({ success: true, data: data[0] });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Delete an order
+app.delete('/api/orders/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    let { error } = await supabase.from('orders').delete().eq('id', id);
+    
+    if (error) {
+      const { error: retryError } = await supabase.from('orders').delete().eq('order_id', id);
+      if (retryError) throw retryError;
+    }
+    
+    res.json({ success: true, message: 'Order deleted successfully' });
   } catch (error) {
     res.status(500).json({ success: false, error: error.message });
   }

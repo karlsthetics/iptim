@@ -28,8 +28,14 @@ const Admin = () => {
 
   const checkAdminStatus = async () => {
     try {
+      if (!supabase) {
+        setIsAdmin(false);
+        setTimeout(() => navigate('/login'), 2000);
+        return;
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       if (!user) {
         setIsAdmin(false);
         setTimeout(() => navigate('/login'), 2000);
@@ -170,6 +176,25 @@ const Admin = () => {
       }
     } catch (error) {
       alert('Error updating order: ' + error.message);
+    }
+  };
+
+  const handleDeleteOrder = async (orderId) => {
+    if (window.confirm('Are you sure you want to delete this order? This action cannot be undone.')) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/orders/${orderId}`, {
+          method: 'DELETE'
+        });
+        const data = await response.json();
+        if (data.success) {
+          alert('Order deleted successfully!');
+          fetchOrders();
+        } else {
+          throw new Error(data.error);
+        }
+      } catch (error) {
+        alert('Error deleting order: ' + error.message);
+      }
     }
   };
 
@@ -451,6 +476,15 @@ const Admin = () => {
                           </button>
                         ))}
                       </div>
+                    </div>
+                    <div className="order-actions" style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #eaeaea', display: 'flex', justifyContent: 'flex-end' }}>
+                      <button
+                        className="delete-btn"
+                        onClick={() => handleDeleteOrder(order.id || order.order_id)}
+                        style={{ background: '#ff3366', color: 'white', padding: '8px 16px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontWeight: 'bold' }}
+                      >
+                        🗑️ Delete Order
+                      </button>
                     </div>
                   </div>
                 ))

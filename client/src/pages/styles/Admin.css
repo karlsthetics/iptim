@@ -2,7 +2,7 @@
 
 .admin-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, #f5e6ff, #ffe6f0);
+  background: transparent;
   padding: 2rem 0;
 }
 

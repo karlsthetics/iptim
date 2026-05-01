@@ -36,6 +36,8 @@ function App() {
 
   // Auth state listener
   useEffect(() => {
+    if (!supabase) return; // Skip if Supabase is not configured
+
     // Check current session
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
@@ -99,7 +101,7 @@ function App() {
 
   return (
     <Router>
-      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'transparent' }}>
         {/* Header component visible on all pages */}
         <Header cartId={cartId} user={user} setUser={setUser} />
 

@@ -303,3 +303,21 @@ export const subscribeToNewsletter = async (email) => {
     throw error;
   }
 };
+
+/**
+ * Delete an order
+ * @param {string} orderId 
+ */
+export async function deleteOrder(orderId) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/orders/${orderId}`, {
+      method: 'DELETE',
+    });
+    const data = await response.json();
+    if (!data.success) throw new Error(data.error);
+    return data;
+  } catch (error) {
+    console.error('Error deleting order:', error);
+    throw error;
+  }
+}

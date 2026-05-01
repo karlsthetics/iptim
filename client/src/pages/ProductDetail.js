@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { addToCart, createCart, fetchReviews, addReview } from '../utils/api';
+import { addToCart, createCart, fetchReviews, addReview, fetchProductById } from '../utils/api';
 import './styles/ProductDetail.css';
 
 // All products database
@@ -60,18 +60,33 @@ function ProductDetail({ cartId, setCartId }) {
   const [submittingReview, setSubmittingReview] = useState(false);
 
   useEffect(() => {
-    const found = ALL_PRODUCTS.find(p => p.id === id);
-    if (found) {
-      setProduct(found);
-      setSelectedSize(found.sizes?.[0] || '');
-      setSelectedColor(found.colors?.[0] || '');
-      
-      // Fetch real reviews
-      fetchReviews(id)
-        .then(data => setReviews(data))
-        .catch(err => console.error('Error fetching reviews:', err));
-    }
-    setLoading(false);
+    let found = ALL_PRODUCTS.find(p => p.id === id);
+    
+    // Fetch from backend to get latest status or admin products
+    fetchProductById(id)
+      .then(dbProd => {
+        if (dbProd) found = { ...found, status: dbProd.status || found.status };
+        if (found) {
+          setProduct(found);
+          setSelectedSize(found.sizes?.[0] || '');
+          setSelectedColor(found.colors?.[0] || '');
+        }
+        setLoading(false);
+      })
+      .catch(err => {
+        // Fallback to local
+        if (found) {
+          setProduct(found);
+          setSelectedSize(found.sizes?.[0] || '');
+          setSelectedColor(found.colors?.[0] || '');
+        }
+        setLoading(false);
+      });
+
+    // Fetch real reviews
+    fetchReviews(id)
+      .then(data => setReviews(data))
+      .catch(err => console.error('Error fetching reviews:', err));
   }, [id]);
 
   useEffect(() => {
@@ -133,7 +148,15 @@ function ProductDetail({ cartId, setCartId }) {
         localStorage.setItem('cartId', currentCartId);
       }
       
-      await addToCart(currentCartId, { productId: id, quantity: parseInt(quantity), size: selectedSize, color: selectedColor });
+      await addToCart(currentCartId, { 
+        productId: id, 
+        quantity: parseInt(quantity), 
+        size: selectedSize, 
+        color: selectedColor,
+        name: product.name,
+        price: product.price,
+        image: product.image
+      });
       setAddedToCart(true);
       setTimeout(() => setAddedToCart(false), 2000);
     } catch (err) {
@@ -143,7 +166,15 @@ function ProductDetail({ cartId, setCartId }) {
           const newCartId = await createCart();
           setCartId(newCartId);
           localStorage.setItem('cartId', newCartId);
-          await addToCart(newCartId, { productId: id, quantity: parseInt(quantity), size: selectedSize, color: selectedColor });
+          await addToCart(newCartId, { 
+            productId: id, 
+            quantity: parseInt(quantity), 
+            size: selectedSize, 
+            color: selectedColor,
+            name: product.name,
+            price: product.price,
+            image: product.image
+          });
           setAddedToCart(true);
           setTimeout(() => setAddedToCart(false), 2000);
         } catch (retryErr) {
@@ -168,10 +199,6 @@ function ProductDetail({ cartId, setCartId }) {
           </div>
           <div className="product-info-section">
             <h1 className="product-detail-name">{product.name}</h1>
-            <div className="product-detail-rating">
-              <span className="stars">{'⭐'.repeat(Math.floor(product.rating))}</span>
-              <span className="rating-count">({product.reviews} reviews)</span>
-            </div>
             <div className="product-detail-price">
               <span className="price">{product.currency}{product.price}</span>
               <span className="badge">Limited Edition</span>
@@ -199,13 +226,21 @@ function ProductDetail({ cartId, setCartId }) {
             </div>
 
             <div className="form-group">
-              <label htmlFor="quantity">Quantity</label>
-              <input id="quantity" type="number" min="1" max="99" value={quantity} onChange={(e) => { const val = parseInt(e.target.value); if (val > 0 && val <= 99) setQuantity(val); }} className="quantity-input" />
+              <label>Quantity</label>
+              <div className="quantity-fixed">
+                <span className="badge" style={{ background: '#ff69b4', color: '#fff', padding: '6px 12px', borderRadius: '12px' }}>1 of 1 Available</span>
+              </div>
             </div>
 
-            <button className={`btn btn-primary add-to-cart-btn ${addedToCart ? 'added' : ''}`} onClick={handleAddToCart}>
-              {addedToCart ? '✓ Added to Cart!' : 'Add to Cart'}
-            </button>
+            {product.status === 'sold_out' ? (
+              <button className="btn btn-secondary add-to-cart-btn" disabled style={{ background: '#ccc', borderColor: '#ccc', cursor: 'not-allowed' }}>
+                SOLD OUT
+              </button>
+            ) : (
+              <button className={`btn btn-primary add-to-cart-btn ${addedToCart ? 'added' : ''}`} onClick={handleAddToCart}>
+                {addedToCart ? '✓ Added to Cart!' : 'Add to Cart'}
+              </button>
+            )}
 
             <div className="product-features">
               <h3>Product Features</h3>

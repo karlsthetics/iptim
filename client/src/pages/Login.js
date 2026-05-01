@@ -45,6 +45,11 @@ function Login({ setUser }) {
         return;
       }
 
+      if (!supabase) {
+        setError('Authentication is not configured. Please set up Supabase credentials.');
+        return;
+      }
+
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email: formData.email,
         password: formData.password,
@@ -76,6 +81,11 @@ function Login({ setUser }) {
 
       if (formData.password !== formData.confirmPassword) {
         setError('Passwords do not match');
+        return;
+      }
+
+      if (!supabase) {
+        setError('Authentication is not configured. Please set up Supabase credentials.');
         return;
       }
 

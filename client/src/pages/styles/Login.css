@@ -2,7 +2,7 @@
 
 .login-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, #fff0f5, #ffe4e1, #fff8f0);
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;

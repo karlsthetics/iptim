@@ -161,7 +161,7 @@ function Checkout({ cartId, setCartId }) {
               <p>Tax: ₱{cart.tax.toFixed(2)}</p>
               <p className="total">Total: ₱{cart.total.toFixed(2)}</p>
             </div>
-            <button className="btn btn-primary" onClick={() => navigate('/')}>
+            <button className="btn btn-primary" onClick={() => window.location.href = '/'}>
               Back to Shop
             </button>
           </div>
